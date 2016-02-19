@@ -10,7 +10,7 @@ mooltipass.device = mooltipass.device || {};
  * Information about connected Mooltipass app
  * Set on mooltipass.device.onSearchForApp()
  */
-mooltipass.device._app = null;
+mooltipass.device._app = page.settings.useMoolticute? { enabled: true  } : null;
 
 /**
  * Contains status information about the device
@@ -62,6 +62,12 @@ mooltipass.device._latestRandomStringRequest = null;
  * Periodically sends PING to device which returns current status of device
  */
 mooltipass.device.checkConnection = function() {
+
+    //When using moolticute, don't lookup for app
+    if (page.settings.useMoolticute) {
+        return;
+    }
+
     if(!mooltipass.device.connectedToApp) {
         // Search for Mooltipass App
         chrome.management.getAll(mooltipass.device.onSearchForApp);
@@ -115,6 +121,15 @@ mooltipass.device.onSearchForApp = function(ext) {
  * @returns {{connectedToApp: boolean, connectedToDevice: boolean, deviceUnlocked: boolean}}
  */
 mooltipass.device.getStatus = function() {
+
+    if (page.settings.useMoolticute) {
+        return {
+            'connectedToApp': moolticute.connectedToDaemon,
+            'connectedToDevice': moolticute.status.connected,
+            'deviceUnlocked': moolticute.status.unlocked
+        }
+    }
+
     return {
         'connectedToApp': mooltipass.device._app ? true : false,
         'connectedToDevice': mooltipass.device._status.connected,
@@ -273,12 +288,38 @@ mooltipass.device.retrieveCredentials = function(callback, tab, url, submiturl, 
         return;
     }
 
-    //TODO: remove obsolete parameter "context" which is replaced by "domain" (2015-07-27, wait a month)
-    request = { getInputs : {context: parsed_url.domain, domain: parsed_url.domain, subdomain: parsed_url.subdomain} };
+    if (page.settings.useMoolticute) {
+        var srv = '';
+        if (parsed_url.domain && parsed_url.subdomain) {
+            srv = parsed_url.subdomain + '.' + parsed_url.domain;
+        }
+        else if (parsed_url.domain) {
+            srv = parsed_url.domain;
+        }
 
-    console.log('sending to '+mooltipass.device._app.id);
-    mooltipass.device._asynchronous.inputCallback = callback;
-    chrome.runtime.sendMessage(mooltipass.device._app.id, request);
+        moolticute.askPassword(srv, '', function(data) {
+            if (data.failed) {
+                callback([]);
+            }
+            else {
+                callback([{
+                    Login: data.login,
+                    Name: '<name>',
+                    Uuid: '<Uuid>',
+                    Password: data.password,
+                    StringFields: []
+                }]);
+            }
+        });
+    }
+    else {
+        //TODO: remove obsolete parameter "context" which is replaced by "domain" (2015-07-27, wait a month)
+        request = { getInputs : {context: parsed_url.domain, domain: parsed_url.domain, subdomain: parsed_url.subdomain} };
+
+        console.log('sending to '+mooltipass.device._app.id);
+        mooltipass.device._asynchronous.inputCallback = callback;
+        chrome.runtime.sendMessage(mooltipass.device._app.id, request);
+    }
 };
 
 /****************************************************************************************************************/
