@@ -176,8 +176,21 @@ mooltipass.device.generatePassword = function(callback, tab, length) {
         mooltipass.device._latestRandomStringRequest = currentDayMinute;
 
         console.log('mooltipass.generatePassword()', 'request random string from app');
-        var request = { getRandom : [] };
-        chrome.runtime.sendMessage(mooltipass.device._app.id, request);
+        if (page.settings.useMoolticute) {
+            moolticute.getRandomNumbers(function(data) {
+                Math.seedrandom(data);
+                if(mooltipass.device._asynchronous.randomCallback) {
+                    mooltipass.device._asynchronous.randomCallback({
+                        'seeds': mooltipass.device.generateRandomNumbers(mooltipass.device._asynchronous.randomParameters.length),
+                        'settings': page.settings,
+                    });
+                }
+            });
+        }
+        else {
+            var request = { getRandom : [] };
+            chrome.runtime.sendMessage(mooltipass.device._app.id, request);
+        }
         return;
     }
 

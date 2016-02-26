@@ -78,6 +78,22 @@ moolticute.askPassword = function(_ctx, _login, _cb) {
 }
 
 /**
+ * Get random numbers
+ */
+moolticute.getRandomNumbers = function(cb) {
+    var id = moolticute._getCallbackId();
+
+    moolticute._qCallbacks[id] = {
+        callback: cb
+    };
+
+    moolticute._ws.send(JSON.stringify({
+        msg: 'get_random_numbers',
+        client_id: id
+    }));
+}
+
+/**
  * Process message from moolticute daemon
  */
 moolticute._ws.onmessage = function(ev) {
@@ -138,8 +154,8 @@ moolticute._ws.onmessage = function(ev) {
         }
         moolticute.fireEvent('statusChange');
     }
-    else if (recvMsg.msg == 'ask_password') {
-
+    else if (recvMsg.msg == 'ask_password' ||
+             recvMsg.msg == 'get_random_numbers') {
         if (moolticute._qCallbacks.hasOwnProperty(recvMsg.client_id)) {
             moolticute._qCallbacks[recvMsg.client_id].callback(recvMsg.data);
             delete moolticute._qCallbacks[recvMsg.client_id];
