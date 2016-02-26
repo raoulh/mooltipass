@@ -12,6 +12,8 @@ moolticute.status = {
         flash_size: 0,
         hw_version: '0'
     },
+    state: 'UnknownStatus',     //state for mooltipass ext compat
+    realState: 'UnknownStatus'  //real state from moolticute
 }
 
 moolticute.connectedToDaemon = false;
@@ -39,11 +41,13 @@ moolticute._ws = page.settings.useMoolticute? new ReconnectingWebSocket('ws://12
 moolticute._ws.onopen = function() {
     console.log("Moolticute daemon connected");
     moolticute.connectedToDaemon = true;
+    moolticute.fireEvent('statusChange');
 }
 
 moolticute._ws.onclose = function() {
     console.log("Moolticute daemon disconnected");
     moolticute.connectedToDaemon = false;
+    moolticute.fireEvent('statusChange');
 }
 
 moolticute._ws.onerror = function() {
@@ -91,17 +95,50 @@ moolticute._ws.onmessage = function(ev) {
 
     if (recvMsg.msg == 'mp_connected') {
         moolticute.status.connected = true;
+        moolticute.fireEvent('statusChange');
     }
     else if (recvMsg.msg == 'mp_disconnected') {
         moolticute.status.connected = false;
+        moolticute.status.state = 'NotConnected';
+        moolticute.fireEvent('statusChange');
     }
     else if (recvMsg.msg == 'status_changed') {
         moolticute.status.unlocked = recvMsg.data == 'Unlocked';
+        moolticute.status.realState = recvMsg.data;
+        moolticute.status.state = recvMsg.data;
+
+        //Keep compatibility with mooltipass chrome App
+        if (recvMsg.data == 'NoCardInserted' || recvMsg.data == 'UnkownSmartcad') {
+            moolticute.status.state = 'NoCard';
+        }
+        else if (recvMsg.data == 'LockedScreen') {
+            moolticute.status.state = 'Locked';
+        }
+
+        moolticute.fireEvent('statusChange');
     }
     else if (recvMsg.msg == 'version_changed') {
         moolticute.status.version = recvMsg.data;
+        moolticute.fireEvent('statusChange');
     }
-    else if (recvMsg.msg == 'ask_passwork') {
+    else if (recvMsg.msg == 'memorymgmt_changed') {
+        if (recvMsg.data) {
+            moolticute.status.state = 'ManageMode';
+        }
+        else {
+             moolticute.status.state = moolticute.status.realState;
+
+             //Keep compatibility with mooltipass chrome App
+             if (recvMsg.data == 'NoCardInserted' || recvMsg.data == 'UnkownSmartcad') {
+                 moolticute.status.state = 'NoCard';
+             }
+             else if (recvMsg.data == 'LockedScreen') {
+                 moolticute.status.state = 'Locked';
+             }
+        }
+        moolticute.fireEvent('statusChange');
+    }
+    else if (recvMsg.msg == 'ask_password') {
 
         if (moolticute._qCallbacks.hasOwnProperty(recvMsg.client_id)) {
             moolticute._qCallbacks[recvMsg.client_id].callback(recvMsg.data);
@@ -109,5 +146,38 @@ moolticute._ws.onmessage = function(ev) {
         }
     }
 
+}
+
+/* Simple event listener for events sent by moolticute
+ */
+moolticute.on = function(type, method, scope) {
+     var listeners, handlers;
+
+     if (!(listeners = this.eventListeners)) {
+         listeners = this.eventListeners = {};
+     }
+     if (!(handlers = listeners[type])) {
+         handlers = listeners[type] = [];
+     }
+     scope = (scope? scope:window);
+     handlers.push({
+         method: method,
+         scope: scope
+     });
+}
+
+moolticute.fireEvent = function(type, data) {
+     var listeners, handlers, i, n, handler, scope;
+     if (!(listeners = this.eventListeners)) {
+         return;
+     }
+     if (!(handlers = listeners[type])) {
+         return;
+     }
+
+     for (i = 0;i < handlers.length;i++) {
+         handler = handlers[i];
+         handler.method.call(handler.scope, type, data);
+     }
 }
 

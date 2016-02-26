@@ -83,6 +83,12 @@ mooltipass.device.checkConnection = function() {
  * Triggers ping to device if app is found and sets mooltipass.device._app
  */
 mooltipass.device.onSearchForApp = function(ext) {
+
+    //When using moolticute, don't lookup for app
+    if (page.settings.useMoolticute) {
+        return;
+    }
+
     var foundApp = false;
     for (var i = 0; i < ext.length; i++) {
         if (ext[i].shortName == mooltipass.device._appName) {
@@ -400,5 +406,16 @@ chrome.runtime.onMessageExternal.addListener(function(message, sender, sendRespo
             mooltipass.device._asynchronous.updateCallback = null;
         }
     }
+});
+
+moolticute.on('statusChange', function(type, data) {
+     console.log('moolticute statusChange event received');
+     mooltipass.device._status = {
+         'connected': moolticute.status.connected,
+         'unlocked': moolticute.status.unlocked,
+         'version': moolticute.status.version,
+         'state' : moolticute.status.state
+     };
+     mooltipass.connectedToApp = moolticute.connectedToDaemon;
 });
 
